@@ -6,7 +6,7 @@
 #include "filesystem.hpp"
 
 enum class layout_item_types : uint8_t {
-	control, window, glue, generator, layout, texture_layer
+	control, window, glue, generator, layout, texture_layer, control2, window2
 };
 
 void layout_to_bytes(layout_level_t const& layout, serialization::out_buffer& buffer) {
@@ -32,19 +32,23 @@ void layout_to_bytes(layout_level_t const& layout, serialization::out_buffer& bu
 		if(holds_alternative<layout_control_t>(m)) {
 			auto& i = get<layout_control_t>(m);
 
-			buffer.write(layout_item_types::control);
+			buffer.write(layout_item_types::control2);
 			buffer.write(i.name);
 			buffer.write(i.abs_x);
 			buffer.write(i.abs_y);
 			buffer.write(i.absolute_position);
+			buffer.write(i.fill_x);
+			buffer.write(i.fill_y);
 		} else if(holds_alternative<layout_window_t>(m)) {
 			auto& i = get<layout_window_t>(m);
 
-			buffer.write(layout_item_types::window);
+			buffer.write(layout_item_types::window2);
 			buffer.write(i.name);
 			buffer.write(i.abs_x);
 			buffer.write(i.abs_y);
 			buffer.write(i.absolute_position);
+			buffer.write(i.fill_x);
+			buffer.write(i.fill_y);
 		} else if(holds_alternative<layout_glue_t>(m)) {
 			auto& i = get<layout_glue_t>(m);
 
@@ -122,6 +126,28 @@ void bytes_to_layout(layout_level_t& layout, serialization::in_buffer& buffer) {
 				main_section.read(temp.abs_x);
 				main_section.read(temp.abs_y);
 				main_section.read(temp.absolute_position);
+				layout.contents.emplace_back(std::move(temp));
+			} break;
+			case layout_item_types::control2:
+			{
+				layout_control_t temp;
+				main_section.read(temp.name);
+				main_section.read(temp.abs_x);
+				main_section.read(temp.abs_y);
+				main_section.read(temp.absolute_position);
+				main_section.read(temp.fill_x);
+				main_section.read(temp.fill_y);
+				layout.contents.emplace_back(std::move(temp));
+			} break;
+			case layout_item_types::window2:
+			{
+				layout_window_t temp;
+				main_section.read(temp.name);
+				main_section.read(temp.abs_x);
+				main_section.read(temp.abs_y);
+				main_section.read(temp.absolute_position);
+				main_section.read(temp.fill_x);
+				main_section.read(temp.fill_y);
 				layout.contents.emplace_back(std::move(temp));
 			} break;
 			case layout_item_types::glue:
@@ -361,17 +387,7 @@ void project_to_bytes(open_project_t const& p, serialization::out_buffer& buffer
 				buffer.write(property::icon);
 				buffer.write(c.icon_id);
 			}
-			for(auto& tc : c.table_columns) {
-				buffer.write(property::table_display_column_data);
-				buffer.write(tc.display_data.header_key);
-				buffer.write(tc.display_data.header_tooltip_key);
-				buffer.write(tc.display_data.header_texture);
-				buffer.write(tc.display_data.cell_tooltip_key);
-				buffer.write(tc.display_data.width);
-				buffer.write(tc.display_data.cell_text_color);
-				buffer.write(tc.display_data.header_text_color);
-				buffer.write(tc.display_data.text_alignment);
-			}
+			
 			buffer.finish_section();
 
 			buffer.start_section(); // optional section
@@ -468,21 +484,7 @@ void project_to_bytes(open_project_t const& p, serialization::out_buffer& buffer
 				buffer.write(dm.type);
 				buffer.write(dm.name);
 			}
-			for(auto& tc : c.table_columns) {
-				buffer.write(property::table_internal_column_data);
-				buffer.write(tc.internal_data.column_name);
-				buffer.write(tc.internal_data.container);
-				buffer.write(tc.internal_data.cell_type);
-				buffer.write(tc.internal_data.has_dy_header_tooltip);
-				buffer.write(tc.internal_data.has_dy_cell_tooltip);
-				buffer.write(tc.internal_data.sortable);
-				buffer.write(tc.internal_data.header_background);
-				buffer.write(tc.internal_data.decimal_alignment);
-			}
-			for(auto& i : c.table_inserts) {
-				buffer.write(property::table_insert);
-				buffer.write(i);
-			}
+			
 			buffer.finish_section();
 		}
 		auto table_list = tables_in_window(p, win);
@@ -546,24 +548,6 @@ void project_to_bytes(open_project_t const& p, serialization::out_buffer& buffer
 		buffer.finish_section();
 
 		buffer.finish_section();
-	}
-}
-
-void make_tables_from_legacy(open_project_t& result) {
-	if(result.tables.empty()) {
-		for(auto& win : result.windows) {
-			for(auto& c : win.children) {
-				if(c.table_columns.empty() == false) {
-					table_definition tab;
-					tab.name = c.name;
-					tab.table_columns = c.table_columns;
-					result.tables.emplace_back(std::move(tab));
-					tab.has_highlight_color = c.has_table_highlight_color;
-					tab.highlight_color = c.table_highlight_color;
-					tab.divider_color = c.table_divider_color;
-				}
-			}
-		}
 	}
 }
 
@@ -753,17 +737,7 @@ open_project_t bytes_to_project(serialization::in_buffer& buffer) {
 							essential_child_section.read(c.template_id);
 							essential_child_section.read(c.ttype);
 						} else if(ptype == property::table_display_column_data) {
-							table_display_column tc;
-							essential_child_section.read(tc.header_key);
-							essential_child_section.read(tc.header_tooltip_key);
-							essential_child_section.read(tc.header_texture);
-							essential_child_section.read(tc.cell_tooltip_key);
-							essential_child_section.read(tc.width);
-							essential_child_section.read(tc.cell_text_color);
-							essential_child_section.read(tc.header_text_color);
-							essential_child_section.read(tc.text_alignment);
-							c.table_columns.emplace_back();
-							c.table_columns.back().display_data = tc;
+							std::abort(); // should not exist any more
 						} else {
 							abort();
 						}
@@ -820,27 +794,13 @@ open_project_t bytes_to_project(serialization::in_buffer& buffer) {
 							optional_child_section.read(m.name);
 							c.members.push_back(m);
 						} else if(ptype == property::table_insert) {
-							std::string n;
-							optional_child_section.read(n);
-							c.table_inserts.push_back(n);
+							std::abort(); // should not exist any more
 						} else if(ptype == property::texture) {
 							optional_child_section.read(c.texture);
 						} else if(ptype == property::table_connection) {
 							optional_child_section.read(c.table_connection);
 						} else if(ptype == property::table_internal_column_data) {
-							if(col_count >= int32_t(c.table_columns.size()))
-								std::abort();
-							table_internal_column tc;
-							optional_child_section.read(tc.column_name);
-							optional_child_section.read(tc.container);
-							optional_child_section.read(tc.cell_type);
-							optional_child_section.read(tc.has_dy_header_tooltip);
-							optional_child_section.read(tc.has_dy_cell_tooltip);
-							optional_child_section.read(tc.sortable);
-							optional_child_section.read(tc.header_background);
-							optional_child_section.read(tc.decimal_alignment);
-							c.table_columns[col_count].internal_data = tc;
-							++col_count;
+							std::abort(); // should not exist any more
 						} else if(ptype == property::tooltip_text_key) {
 							optional_child_section.read(c.tooltip_text_key);
 						} else if(ptype == property::text_key) {
@@ -860,7 +820,6 @@ open_project_t bytes_to_project(serialization::in_buffer& buffer) {
 		}
 	}
 
-	make_tables_from_legacy(result);
 	make_layout_from_legacy(result);
 	return result;
 }
